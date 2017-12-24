@@ -21,7 +21,7 @@
 extern void path_init(char **argv);
 
 /*
- * Expands "$JOHN/" and "~/" in a path name.
+ * Expands "$JOHN/", "~/", "~config/" and "~data/" in a path name.
  * The returned buffer might be overwritten with subsequent calls.
  */
 extern char *path_expand(char *name);

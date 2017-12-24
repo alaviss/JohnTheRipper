@@ -31,9 +31,17 @@ static int john_home_lengthex;
 #include <pwd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef __HAIKU__
+#include <FindDirectory.h>
+#include <fs_info.h>
+#endif
 
 static char *user_home_path = NULL;
 static int user_home_length;
+static char *user_config_path = NULL;
+static int user_config_length;
+static char *user_data_path = NULL;
+static int user_data_length;
 #endif
 
 #include "memdbg.h"
@@ -65,6 +73,26 @@ void path_init(char **argv)
 	user_home_path = mem_alloc(PATH_BUFFER_SIZE);
 	memcpy(user_home_path, pw->pw_dir, user_home_length - 1);
 	user_home_path[user_home_length - 1] = '/';
+
+	if (user_config_path) return;
+#ifdef __HAIKU__
+	user_config_path = mem_alloc(PATH_BUFFER_SIZE);
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, (dev_t)-1, false,
+			user_config_path, PATH_BUFFER_SIZE) != B_OK)
+		return;
+	user_config_length = strlen(user_config_path) + 1;
+	user_config_path[user_config_length - 1] = '/';
+#endif
+
+	if (user_data_path) return;
+#ifdef __HAIKU__
+	user_data_path = mem_alloc(PATH_BUFFER_SIZE);
+	if (find_directory(B_USER_VAR_DIRECTORY, (dev_t)-1, false,
+			user_data_path, PATH_BUFFER_SIZE) != B_OK)
+		return;
+	user_data_length = strlen(user_data_path) + 1;
+	user_data_path[user_data_length - 1] = '/';
+#endif
 
 #ifdef JOHN_PRIVATE_HOME
 	private = path_expand(JOHN_PRIVATE_HOME);
@@ -166,6 +194,24 @@ char *path_expand(char *name)
 		}
 		return name + 2;
 	}
+	if (!strncmp(name, "~config/", 8)) {
+		if (user_config_path &&
+		    user_config_length + strlen(name) - 8 < PATH_BUFFER_SIZE) {
+			strnzcpy(&user_config_path[user_config_length], &name[8],
+				PATH_BUFFER_SIZE - user_config_length);
+			return user_config_path;
+		}
+		return name + 8;
+	}
+	if (!strncmp(name, "~data/", 6)) {
+		if (user_data_path &&
+		    user_data_length + strlen(name) - 6 < PATH_BUFFER_SIZE) {
+			strnzcpy(&user_data_path[user_data_length], &name[6],
+				PATH_BUFFER_SIZE - user_data_length);
+			return user_data_path;
+		}
+		return name + 6;
+	}
 #endif
 
 	return name;
@@ -200,6 +246,8 @@ void path_done(void)
 	MEM_FREE(john_home_path);
 #if JOHN_SYSTEMWIDE
 	MEM_FREE(user_home_path);
+	MEM_FREE(user_config_path);
+	MEM_FREE(user_data_path);
 #endif
 	if (john_home_pathex)
 		MEM_FREE(john_home_pathex);
